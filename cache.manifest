@@ -1,0 +1,26 @@
+CACHE MANIFEST
+# update_v501
+# update 21July2012 Summary Functionality and Error Handling Added
+CACHE:
+index.html
+css/jquery.mobile-1.1.1.min.css
+css/images/ajax-loader.gif
+css/images/ajax-loader.png
+css/images/icons-18-black.png
+css/images/icons-18-white.png
+css/images/icons-36-black.png
+css/images/icons-36-white.png
+js/jquery-1.7.1.min.js
+js/jquery.mobile-1.1.1.min.js
+js/math_uuid/Math.uuid.js
+js/dateExtension.js
+js/numberFunctions.js
+js/json2.js
+plugins/addToHomescreen/src/add2home.js
+plugins/addToHomescreen/style/add2home.css
+img/iphone_icon_home_screen_budget3.png
+img/ipad_icon_home_screen_budget2.png
+img/ipad_landscape_splash_screen_budget2.png
+img/ipad_portrait_splash_screen_budget1.png
+img/iphone_splash_screen_budget3.png
+# NETWORK: set as network to force a non-cached version of the file to be used

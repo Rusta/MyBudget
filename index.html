@@ -1,0 +1,711 @@
+<!DOCTYPE html> 
+<html manifest="cache.manifest">
+<head>
+  <meta charset="utf-8">
+<!--  <meta name="viewport" content="initial-scale=1.0, width=device-width, user-scalable=no">  -->
+  <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no"> 
+  <!-- Note: the above restricts all zooming (either by the browser when entering data or by user pinch & zoom) -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <!--  <link rel="apple-touch-startup-image" href="img/iphone_splash_screen_budget_img1.png"> -->
+  <link rel="apple-touch-icon-precomposed" href="img/iphone_icon_home_screen_budget3.png" /> <!-- 57x57 -->
+  <link rel="apple-touch-icon-precomposed" sizes="72x72" href="img/ipad_icon_home_screen_budget2.png" />
+
+  <!-- startup image for web apps - iPad - landscape (748x1024) 
+     Note: iPad landscape startup image has to be exactly 748x1024 pixels (portrait, with contents rotated).-->
+  <link rel="apple-touch-startup-image" href="img/ipad_landscape_splash_screen_budget2.png" media="screen and (min-device-width: 481px) and (max-device-width: 1024px) and (orientation:landscape)" />
+
+  <!-- startup image for web apps - iPad - portrait (768x1004) -->
+  <link rel="apple-touch-startup-image" href="img/ipad_portrait_splash_screen_budget1.png" media="screen and (min-device-width: 481px) and (max-device-width: 1024px) and (orientation:portrait)" />
+
+  <!-- startup image for web apps (320x460) -->
+  <link rel="apple-touch-startup-image" href="img/iphone_splash_screen_budget3.png" media="screen and (max-device-width: 320px)" />
+    
+  <title>My Budget</title> 
+  <link rel="stylesheet" href="css/jquery.mobile-1.1.1.min.css" />
+  <script src="js/jquery-1.7.1.min.js"></script>
+  <script src="js/jquery.mobile-1.1.1.min.js"></script>
+  <script src="js/dateExtension.js"></script>
+  <script src="js/numberFunctions.js"></script>
+
+  <!-- math uuid plugin -->
+  <script type="text/javascript" src="js/math_uuid/Math.uuid.js"></script>
+
+  <!-- JSON extension to support older browsers -->
+  <script type="text/javascript" src="js/json2.js"></script>
+
+  <script type="text/javascript">
+
+    var cache = window.applicationCache;
+
+    var thisListOfItems = [];
+    var thisBudget = '';
+    var thisBudgetList = [];
+    var currentDate = new Date();
+    var thisDate = currentDate;
+    thisDate.setDate(1); // set to 1st of the month
+    thisDate.setHours(3,3,3,3); // need to handle daylight saving better than this (if set to 0000) it goes back a day
+    var descrValue = ''; // variable to hold the value entered in the item description field
+    var valueValue =''; // variable to hold the value entered in the item value field
+    var addValid = false; // boolean to indicate if description and value are present in these fields (and this we can add the new item)
+    var thisBudgetMonthYear = new Date();
+
+
+    var displayError = function(errorToDisplay){
+
+      // add message to the HTML and hide the div overlay
+      var errorHTML = "<div class='errorDisplay'>" + errorToDisplay + "</div>";
+      $('ul').append(errorHTML);
+      $('ul').listview('refresh'); 
+      $('#overlay').hide();
+
+    } // end displayError function
+
+
+    var buildPage = function(){ 
+
+      try {   // try to get items from local storage if an error is thrown we know the browser does not support HTML 5 localstorage
+              // do display relevant message
+              var retrievedListOfItems = localStorage.getItem('listOfItems');
+              var retrievedListOfBudgets = localStorage.getItem('budgetList');
+              var noBudget = true;
+              var thisMonthYear = getMonthName(thisDate) + ' ' + thisDate.getFullYear();
+
+            } catch(e) {
+                          var errorMessage = "Unfortunately this browser does not support HTML 5 local storage so this app will not work for you - sorry <br/><br/> Maybe try the app again if you get a new phone or upgrade your browser";
+                          displayError(errorMessage); 
+                          return false;             
+                        }              
+
+      if(retrievedListOfBudgets) 
+      { 
+        thisBudgetList = JSON.parse(retrievedListOfBudgets); 
+
+         $.each(thisBudgetList, function(index, value) { 
+                    if(value.period == thisMonthYear)
+                    {
+                      thisBudget = value.budget;
+                      noBudget = false;
+                    }
+          })
+     
+      }
+
+      if(noBudget) { $('#budget').val(''); thisBudget = ''; }
+
+      if(retrievedListOfItems)
+      {
+        thisListOfItems = JSON.parse(retrievedListOfItems);
+      }
+
+      var rowId;
+      var totalValue = 0;
+      var listHTML = '';
+
+       listHTML =     '<li data-role="list-divider">Period - <span class="thisMonthYearDisplay">' + thisMonthYear + '</span></li>' +
+                      '<li data-icon="plus">' +
+                          '<a href="#" onclick="return false;">' +               
+                                  '<div class="item_descr">' +
+                                  '<input type="text" name="name" placeholder="Item Description" id="item_descr" value="" maxlength="30" data-mini="true" class="ui-input-text ui-body-c ui-corner-all ui-shadow-inset ui-mini"/>' +
+                                  '</div>' +
+                                  '<div class="item_value">' +
+                                  '<input type="number" name="value" placeholder="£" id="item_value" value="" max="99999999999999999" data-mini="true" class="ui-input-text ui-body-c ui-corner-all ui-shadow-inset ui-mini"/>' +
+                                  '</div>' +
+                          '</a>' +
+                          '<a href="#" onclick="addNewItem()" data-theme="c" id="addBtn">Add a new item</a>' +
+                      '</li>';
+
+      for (rowId in thisListOfItems){ 
+
+        var itemDate = thisListOfItems[rowId].date;
+        itemDate = parseDate(itemDate);
+        var itemMonthYear = getMonthName(itemDate) + ' ' + itemDate.getFullYear();
+
+        // use our number functions to get a pretty comma separated number
+        var valueDisplay = thisListOfItems[rowId].item_value;
+        valueDisplay = CommaFormatted(CurrencyFormatted(valueDisplay));
+
+
+        //     if( thisListOfItems[rowId].status != "delete" )
+        if( thisListOfItems[rowId].status != "delete" && itemMonthYear == thisMonthYear)
+                  {
+                    listHTML = listHTML + '<li data-icon="delete" id="thisItemID_' + thisListOfItems[rowId].id + '">' +
+                                      '<a href="#">' +
+                                             '<p><span class="item_descr_text">' + thisListOfItems[rowId].item_descr + '<span>' +
+                                             '  £<span class="item_descr_value">' + valueDisplay + '<span></p>' +                                   
+                                      '</a>' +
+                                      '<a href="#" onclick="deleteItem(' + thisListOfItems[rowId].id + ')" data-theme="y">Delete item</a>' +
+                                  '</li>';
+                    totalValue = parseFloat(totalValue) + parseFloat(CurrencyFormatted(thisListOfItems[rowId].item_value));
+
+                  }
+        }
+
+      var retrievedBudget = thisBudget;
+      var totalValueDisplay = CommaFormatted(CurrencyFormatted(totalValue));
+
+      if(retrievedBudget && retrievedBudget > 0)
+      {
+        thisBudget = retrievedBudget;
+        thisBudgetDisplay = CommaFormatted(CurrencyFormatted(thisBudget));
+
+        listHTML =  listHTML + '<li>Total: £' + totalValueDisplay + '</li>';
+
+        var remainingBudget = parseFloat(retrievedBudget) - parseFloat(totalValue);
+        var remainingBudgetDisplay = CommaFormatted(CurrencyFormatted(remainingBudget));
+
+        if (remainingBudget < 0) 
+              { // over budget
+                    listHTML =  listHTML + '<li>Budget: <span class="overBudget">£' + remainingBudgetDisplay + '</span><span class="minorText"> over your budget of </span> £' + thisBudgetDisplay + '</li>';
+              }
+              else
+              { // under budget
+                    listHTML =  listHTML + '<li>Budget: <span class="underBudget">£' + remainingBudgetDisplay + '</span><span class="minorText"> of </span> £' + thisBudgetDisplay + ' <span class="minorText">remaining</span></li>';
+              }
+      }
+      else
+      {
+       // no budget and/ has been set so just show the total
+       thisBudget = '';
+       listHTML =  listHTML + '<li>Total: £' + totalValueDisplay + '</li>';
+      }
+
+      $('#mainList').empty();
+      $('ul').append(listHTML);
+      $('ul').listview('refresh');    
+
+      // add new item if user presses enter key when on the title or detail text box
+      $('#item_value').keypress(function(e){ if (e.which == 13 && $(this).val().length > 0)  {  addNewItem(); } } );
+
+      // change style of 'add' button from grey to green when both entry fields have a value
+      // when user types in description and value fields set the variable value and run the check function
+      $('#item_descr').keyup(function(){ descrValue = $(this).val(); checkAddValid(); } );
+      $('#item_value').keyup(function(){ valueValue = $(this).val(); checkAddValid(); } );
+
+      var checkAddValid = function(){ 
+                                      if( descrValue.length > 0 && valueValue.length > 0 )
+                                      {  
+                                        addValid = true; 
+                                        //  traverse the jQuery mobile rendered DOM to change our styles from grey to green
+                                        $('#addBtn > :nth-child(1) > :nth-child(2)').removeClass('ui-btn-up-c');
+                                        $('#addBtn > :nth-child(1) > :nth-child(2)').addClass('ui-btn-up-z');
+                                       }
+                                      else
+                                      { 
+                                        addValid = false; 
+                                        /* Maybe add animation to highlight the fields to be completed */
+                                        // $('#item_descr').addClass('highlightField');
+
+                                        //  traverse the jQuery mobile rendered DOM to change our styles from grey to green
+                                        $('#addBtn > :nth-child(1) > :nth-child(2)').addClass('ui-btn-up-c');
+                                        $('#addBtn > :nth-child(1) > :nth-child(2)').removeClass('ui-btn-up-z');
+
+                                      }
+
+                                      /* remove highlightField class if input box now has a value */
+                                      if ( descrValue.length > 0) { $('#item_descr').removeClass('highlightField'); }
+                                      if ( valueValue.length > 0) { $('#item_value').removeClass('highlightField'); }
+
+                                     };
+
+      // hide the div overlay when build is complete
+      $('#overlay').hide();
+        
+
+    }; // end buildPage function
+
+    var addNewItem = function() {
+
+      if (addValid)
+      {
+          var uniqueID = Math.uuid(8, 10);   // the 8 restricts the length and base 10 restricts to only numeric values
+          // append current date-time-stamp
+          var currentDateTime = new Date();
+          currentDateTime = String(currentDateTime.getDate()) + String(currentDateTime.getMonth() +1) + String(currentDateTime.getFullYear()) + String(currentDateTime.getHours()) + String(currentDateTime.getMinutes()) + String(currentDateTime.getSeconds()) + String(currentDateTime.getMilliseconds());;
+          var uniqueID = uniqueID + currentDateTime;
+
+          // add new item to our list of items
+          thisListOfItems.push( { "id": uniqueID, "date": thisDate, "item_descr": descrValue, "item_value": valueValue, "status":"new", "sync":"open" });
+          // then update localy stored list to match our current list
+          localStorage.setItem('listOfItems', JSON.stringify(thisListOfItems));
+          // remove current list html and then re-build
+          $('#mainList').empty();
+          buildPage();
+          /* Reset variables */
+          descrValue = ''; 
+          valueValue =''; 
+          addValid = false; 
+      }
+      else
+      { 
+        if ( descrValue.length < 1) { $('#item_descr').addClass('highlightField'); }
+        if ( valueValue.length < 1) { $('#item_value').addClass('highlightField'); }
+      }
+
+    } // end addNewItem function  
+
+
+    var deleteItem = function(id) {
+
+      // need to remove any previously added delete logic from the delete button
+      $('#deleteMe').unbind();
+
+      // modify the delete confirm modal
+      $.each(thisListOfItems, function(index, value) { 
+                if(value.id == id)
+                {
+                  var thisDescr = value.item_descr;
+                  var thisValue = value.item_value;
+                  var thisHTML = thisDescr + '  £' + thisValue;
+                  $('#thisItemToDelete').html(thisHTML);
+
+                  $('#deleteMe').click(function(e){ 
+                                                  deleteThisItem(id);
+                                                  })
+                }
+      })
+
+      // open the delete confirm modal
+      $.mobile.changePage( $('#deleteConfirm'), { role: 'dialog', transition: 'none' } );
+
+
+    } // end deleteItem function  
+
+    var deleteThisItem = function(id){
+
+      var deleteIndex;
+
+      // loop through JSON and set status to delete for this ID
+      $.each(thisListOfItems, function(index, value) { 
+
+                if(value.id == id)
+                {
+                  // value.status="delete"
+                  deleteIndex = index;
+                }
+        });
+      
+      if(deleteIndex > -1) { thisListOfItems.splice(deleteIndex,1); }
+
+      // update the stored JSON
+      localStorage.setItem('listOfItems', JSON.stringify(thisListOfItems));
+
+      // re-build page
+      buildPage();
+
+    } // end deleteThisItem function
+
+    var clickOptions = function(){
+
+      thisBudgetMonthYear = getMonthName(thisDate) + ' ' + thisDate.getFullYear();
+      //  $('#budgetPeriod').text(thisBudgetMonthYear);
+      $('#budgetPeriod').text(thisBudgetMonthYear);
+      $('#budget').val(thisBudget);
+      // alert(thisBudget);
+
+    } // end clickOptions function
+
+    var setBudget = function(){
+
+      var thisNewBudget = $('#budget').val();
+      var budgetPosn;
+
+      if (thisNewBudget)
+      {
+        localStorage.setItem('budget', thisNewBudget);
+
+            $.each(thisBudgetList, function(index, value) { 
+                if(value.period == thisBudgetMonthYear)
+                {
+                  budgetPosn = index;             
+                }
+            })
+
+          if(budgetPosn > -1 )
+          {
+            thisBudgetList.splice(budgetPosn,1);
+          }
+          
+
+          // add new budget to our list of budgets
+          thisBudgetList.push( { "period": thisBudgetMonthYear, "budget": thisNewBudget });
+          // then update localy stored list to match our current list
+          localStorage.setItem('budgetList', JSON.stringify(thisBudgetList));
+
+      }
+
+      // then re-bulid page
+      buildPage();
+
+    } // end setBudget function
+
+    var previousBtn = function(e){
+
+      var thisMonth = thisDate.getMonth();
+      var thisYear = thisDate.getFullYear();
+
+      if(thisMonth == 0)
+      {
+        // current month is january so need to set to previous year and december
+        thisDate.setMonth(11);
+        thisDate.setYear(thisYear - 1);
+      }
+      else
+      {
+        // current month is later than january so just go back one month
+        thisDate.setMonth(thisMonth - 1);
+      }
+
+      // to make it feel like we are changing pages we show a black overlay, before a delayed page build and then hide div at end of build
+      $('html, body').animate({scrollTop: '0px'}, 300);
+      /* RWW ToDo : probably don't need this transition? but test on mobile the effect/affect if removed */
+      setTimeout(function(){ $.mobile.changePage( $('#home') ) } , 400 ); 
+      $('#overlay').show(); 
+      setTimeout(function(){ buildPage() }, 500); 
+
+     
+    } // end previousBtn function
+
+    var nextBtn = function(){
+
+      var thisMonth = thisDate.getMonth();
+      var thisYear = thisDate.getFullYear();
+
+      if(thisMonth == 11)
+      {
+        // current month is december so need to set to next year and january
+        thisDate.setMonth(0);
+        thisDate.setYear(thisYear + 1);
+      }
+      else
+      {
+        // current month is earlier than december so just go forwards one month
+        thisDate.setMonth(thisMonth + 1);
+      }
+
+      $('html, body').animate({scrollTop: '0px'}, 300);
+      setTimeout(function(){ $.mobile.changePage( $('#home') ) } , 400 );
+      $('#overlay').show(); 
+      setTimeout(function(){ buildPage() }, 500); 
+
+    } // end nextBtn function
+
+    var todayBtn = function(){
+
+      var today = new Date();
+      var thisMonth = today.getMonth();
+      var thisYear = today.getFullYear();
+
+      thisDate.setMonth(thisMonth);
+      thisDate.setYear(thisYear);
+
+      $('html, body').animate({scrollTop: '0px'}, 300);
+      setTimeout(function(){ $.mobile.changePage( $('#home') ) } , 400 );
+      $('#overlay').show(); 
+      setTimeout(function(){ buildPage() }, 500); 
+
+    } // end todayBtn function
+
+    var summaryBtn = function(){
+
+    //  console.log(thisListOfItems);
+
+      // sort the JSON object by date 
+      thisListOfItems.sort(function(a,b) { return new Date(a.date) - new Date(b.date) });
+
+      // using a combo of listOfItems and budgetList let's build a summary table
+
+      var thisSummaryHTML = "<table summary='This table shows a summary of period spend against Budget'>" + 
+                                "<thead>" +
+                                    "<tr>" + 
+                                       "<th scope='col'></th>" + 
+                                       "<th scope='col'>Spent</th>" +  
+                                       "<th scope='col'>Budget</th>" +  
+                                       "<th scope='col'>+ / -</th>" + 
+                                     "</tr>" + 
+                                "</thead>" +
+                                "<tbody>";
+
+      var thisRowMonthYear, previousRowMonthYear, thisRowMonthBudget, previousRowMonthBudget, totalSpent;
+      var thisRowCount = thisListOfItems.length;
+
+      $.each(thisListOfItems, function(index, value) { 
+
+        if (value.status == "new" && value.date) {
+
+              // get the Month Year of this row of data 
+              // var thisMonthYear = getMonthName(new Date(value.date)) + ' ' + new Date(value.date).getFullYear(); 
+              // replaced the above with the below as the above only seemed to work on newer browsers iPhone 4S and not older ones such as the iPhone 3G/4 and HTC Wildfire 2
+              var thisMonthYear = getMonthName(parseDate(value.date)) + ' ' + parseDate(value.date).getFullYear();    
+              var thisMonthBudget;
+
+              /* get the budget for this rows period */
+              $.each(thisBudgetList, function(index, value) { 
+                      if(value.period == thisMonthYear)
+                      {
+                        thisMonthBudget = value.budget;
+                      }
+              })
+              
+              //  if (!thisMonthBudget) {  }
+
+              var createHTML = function(monthYear, totalSpent, monthBudget) {
+                                            var createdHTML = "<tr> <th scope='row'>" +  monthYear + "</th><td> £" + CommaFormatted(CurrencyFormatted(totalSpent)) + "</td>";
+                                            if(monthBudget) 
+                                              { 
+                                                createdHTML = createdHTML + "<td> £" + CommaFormatted(CurrencyFormatted(monthBudget)) + "</td>";
+                                                var difference = parseFloat(monthBudget) - parseFloat(totalSpent);
+                                                var differenceDisplay = CommaFormatted(CurrencyFormatted(difference));
+                                                if (difference < 0) 
+                                                  { 
+                                                    createdHTML = createdHTML + "<td><span class='overBudget'> £" + differenceDisplay + "</span></td></tr>"; 
+                                                  }
+                                                else
+                                                  {
+                                                    createdHTML = createdHTML + "<td><span class='underBudget'> £" + differenceDisplay + "</span></td></tr>";
+                                                  }                                          
+                                              }
+                                              else
+                                              {
+                                                createdHTML = createdHTML + "<td>N/A</td><td>N/A</td>";
+                                              }
+                                        return createdHTML;
+                                      } // end createHTML function
+
+
+              /* if only one row in data then handle this special case */   
+              if (thisRowCount == 1) { thisSummaryHTML = thisSummaryHTML + createHTML(thisMonthYear, value.item_value, thisMonthBudget); }             
+
+              /* if more than one row then we iterate through each of them comparing the period with the previous row */
+              if (index == 0 ) { thisRowMonthYear = thisMonthYear; thisRowMonthBudget = thisMonthBudget; totalSpent = parseFloat(value.item_value); }
+              else
+              {
+                previousRowMonthYear = thisRowMonthYear;
+                previousRowMonthBudget = thisRowMonthBudget;
+                thisRowMonthYear = thisMonthYear;
+                thisRowMonthBudget = thisMonthBudget;
+
+                if ( thisRowMonthYear == previousRowMonthYear ) /* while month is the same we just increment total */
+                  { totalSpent = parseFloat(totalSpent) + parseFloat(value.item_value); }
+                else /* when months are different we output the total row for the previous month */
+                  { thisSummaryHTML = thisSummaryHTML + createHTML(previousRowMonthYear, totalSpent, previousRowMonthBudget);
+                    totalSpent = parseFloat(value.item_value);
+                  }
+              }
+
+              /* if last row then write out whatever we are left with */
+              if (index == thisRowCount - 1 && index > 0)
+              {
+                  thisSummaryHTML = thisSummaryHTML + createHTML(thisRowMonthYear, totalSpent, thisRowMonthBudget);
+              }
+
+            } // end restrict only on valid items (exclude deleted)
+
+         }) // end each loop
+
+        thisSummaryHTML = thisSummaryHTML + "</tbody></table>";
+
+
+      $('#summaryTable').html(thisSummaryHTML);
+
+    } // end summaryBtn function
+
+    var test = function(){
+      // window.scrollTo(0, 1);
+      setTimeout( function(){ window.scrollTo(0, 1); }, 100 );
+    } // end test function
+
+
+  $(document).ready(function() {
+
+      // clean-up delete old marked as delete items
+     // deleteLegacy();
+     
+      // for testing to clear local storage
+      // localStorage.listOfItems = '';
+      // localStorage.budgetList = '';
+           
+      try {  
+            cache.addEventListener('updateready', function(e) {
+            if (cache.status == cache.UPDATEREADY) {
+              cache.swapCache();
+              if (confirm('An update to this app has been downloaded. Press OK to refresh!')) {
+                window.location.reload();
+                  }
+                }
+              }, false);
+
+          } catch(e) { 
+                        
+                      // if the above code does not kickin then any codeline updates won't be seen until they next open/refresh the app...
+                      // have a think about this one. Only seems to happen on Jay's old Android HTC Hero which doesn't support HTML 5 local 
+                      // storage so the app wouldn't work anyway
+                      }             
+
+      buildPage();  
+
+
+    }); // end documentReady function
+
+
+  </script>
+
+
+  <style type="text/css">
+     
+     .item_descr {  width: 80%; float: left; margin-left: -10px; }
+     .item_descr_text { font-size: 14px; }
+     .item_value {  width: 20%; float: left; margin-left: 10px; }
+     .ui-li-desc { margin: 0px; }
+     .ui-li-divider, .ui-li-static { font-size: 16px; }
+     .budget { width: 100px; }
+     .minorText { font-size: 12px; }
+     .underBudget { color: green; }
+     .overBudget { color: red; }
+     .highlightField { border: 1px solid red !important; }
+     .errorDisplay { padding: 18px; color: #800000; }     
+
+     table { width:100%; }
+     table thead th { text-align:left; border-bottom-width:1px; border-top-width:1px; }
+     table th, td { text-align:left; padding:6px; font-size: 12px;}
+
+
+     #overlay {   opacity:    0.5; 
+                    background: #000; 
+                    width:      100%;
+                    height:     100%; 
+                    z-index:    10;
+                    top:        0; 
+                    left:       0; 
+                    position:   fixed; 
+
+     };
+
+     .nav-buttons { padding: 20px; }
+
+     @media (max-width: 320px){ /* for screen width that is less than 320px */
+        .nav-buttons { padding: 10px; }
+        .portraitPhonePlus { display:none !important; }
+        }
+
+     @media (min-width: 321px){ /* for screen width that is greater than 321px */
+        .nav-buttons { padding: 10px; }
+        .portraitPhone { display:none !important; }
+        }
+     
+
+     /* Custom Data Themes to Colour the Buttons Green and Red */
+
+     .ui-btn-up-y {
+          border: 1px solid red;
+          background-image: -webkit-gradient(linear,left top,left bottom,from(#FAFAFA),to(red));
+          /* background-image: -webkit-linear-gradient(#FAFAFA,#DD0E0E); */
+          background-image: -webkit-linear-gradient(#FAFAFA,red);
+          background-image: -moz-linear-gradient(#FAFAFA,red);
+          background-image: -ms-linear-gradient(#FAFAFA,red);
+          background-image: -o-linear-gradient(#FAFAFA,red);
+          background-image: linear-gradient(#FAFAFA,red);
+          */
+          }
+     .ui-btn-up-z {
+          border: 1px solid green;
+          background-image: -webkit-gradient(linear,left top,left bottom,from(#FAFAFA),to(green));
+          /* background-image: -webkit-linear-gradient(#FAFAFA,#DD0E0E); */
+          background-image: -webkit-linear-gradient(#FAFAFA,green);
+          background-image: -moz-linear-gradient(#FAFAFA,green);
+          background-image: -ms-linear-gradient(#FAFAFA,green);
+          background-image: -o-linear-gradient(#FAFAFA,green);
+          background-image: linear-gradient(#FAFAFA,#green);
+          */
+          }    
+
+      /* override some jQuery mobile styles */   
+
+      .ui-title { font-weight: normal !important; font-size: 19px !important; font-family: "Helvetica Neue", "Helvetica", "Arial", "sans-serif"; } 
+      .ui-bar-b { font-weight: normal !important; font-size: 17px !important; font-family: "Helvetica Neue", "Helvetica", "Arial", "sans-serif";  }
+      .ui-btn-inner { font-weight: normal !important; font-size: 16px !important; font-family: "Helvetica Neue", "Helvetica", "Arial", "sans-serif";  }
+
+
+
+      .ui-footer .ui-btn-icon-notext, .ui-header .ui-btn-icon-notext { top: 10px; }
+
+  </style>
+
+</head> 
+
+  
+<body> 
+
+
+  <div data-role="page" id="home">
+    <div id="overlay"></div>
+        <div data-role="header">
+         <h1>My Budget</h1>
+         <a href="#options" data-icon="gear" class="ui-btn-right portraitPhone" onclick="clickOptions()" data-iconpos="notext">Options</a>
+         <a href="#options" data-icon="gear" class="ui-btn-right portraitPhonePlus" onclick="clickOptions()">Options</a>
+        </div>          
+        <div data-role="content" >
+          <ul data-role="listview" data-split-theme="d" data-inset="false" id="mainList">         
+          </ul>
+        </div>
+        <div class="nav-buttons">
+          <fieldset class="ui-grid-b">
+            <div class="ui-block-a"><button type="submit" data-theme="b" data-mini="true" onclick="previousBtn()"> <<< </button></div>
+            <div class="ui-block-b"><button type="submit" data-theme="a" data-mini="true" onclick="todayBtn()">Now</button></div>   
+            <div class="ui-block-c"><button type="submit" data-theme="b" data-mini="true" onclick="nextBtn()"> >>> </button></div>     
+          </fieldset>
+          <a href="#summary" data-role="button" data-theme="e" onclick="summaryBtn()">Summary</a>
+          <!-- <a href="#" data-role="button" data-theme="1" onclick="test()">Test</a> -->
+        </div>    
+  </div> <!-- /page home -->
+
+
+  <div data-role="dialog" id="deleteConfirm">
+    <div data-role="header" data-theme="d">
+      <h1>Delete?</h1>
+    </div>
+    <div data-role="content" data-theme="c">
+      <p>Are you sure you want to delete this item?</p>
+      <p><span id="thisItemToDelete">Detail Here </span><p>
+      <fieldset class="ui-grid-a">
+        <div class="ui-block-a"><a href="#" data-role="button" data-rel="back" data-mini="true" data-theme="b" id="deleteMe">Yes</a></div>     
+        <div class="ui-block-b"><a href="#" data-role="button" data-rel="back" data-mini="true" data-theme="c">No</a></div>    
+      </fieldset>              
+    </div>
+  </div> <!-- /page deleteConfirm -->
+
+
+  <div data-role="dialog" id="options">
+    <div data-role="header" data-theme="b">
+      <h1>Options</h1>
+    </div>
+    <div data-role="content" data-theme="c">
+      <p>Budget for <span id="budgetPeriod"></span></p>
+      <div class="budget">
+        <input type="number" name="budget" placeholder="£" id="budget" value="" data-mini="true" class="ui-input-text ui-body-c ui-corner-all ui-shadow-inset ui-mini"/>
+      </div>
+      <a href="#" data-role="button" data-rel="back" data-theme="c" id="saveOptions" onclick="setBudget()">Save</a> 
+    </div>
+  </div> <!-- /page Options -->
+
+
+  <div data-role="dialog" id="summary">
+    <div data-role="header" data-theme="b">
+      <h1>Summary</h1>
+    </div>
+    <div data-role="content" data-theme="c">
+      <div id="summaryTable">
+        <!-- Summary Table to go here! -->
+      </div>
+      <a href="#" data-role="button" data-rel="back" data-theme="c" id="saveOptions" onclick="">Close</a> 
+    </div>
+  </div> <!-- /page Summary -->
+
+
+  <!-- Add to Homescreen javascript pop-up for iOs devices -->
+  <link rel="stylesheet" href="plugins/addToHomescreen/style/add2home.css">
+  <script type="application/javascript" src="plugins/addToHomescreen/src/add2home.js"></script>   
+
+  
+</body>
+</html>
