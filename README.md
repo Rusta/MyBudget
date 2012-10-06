@@ -1,0 +1,1 @@
+Proof of concept web app that can run locally without internet connction and store simple budget data in local storage
