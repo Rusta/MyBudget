@@ -6,7 +6,7 @@ function parseDate(input) {
 }
 
 var getMonthName = function(thisDate) {
-        var m = ['January','Febuary','March','April','May','June','July','August','September','October','November','Decemeber'];
+        var m = ['January','Febuary','March','April','May','June','July','August','September','October','November','December'];
         return m[thisDate.getMonth()];
 }
 var getMonthNameShort = function(thisDate) {
